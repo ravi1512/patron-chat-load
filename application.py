@@ -9,6 +9,7 @@
 
 NOTE : A traveler is identified by a chatid. chatid and traveler_id are used interchangeably.
 """
+import os
 
 from flask import Flask
 from flask import request
@@ -16,8 +17,21 @@ from sqlalchemy import create_engine
 
 
 application = Flask(__name__)
-engine = create_engine("mysql+mysqlconnector://root:password@gp-mysql.cvxevd8nqncr.us-east-2.rds.amazonaws.com:3306/ithaka", echo=True)
 
+
+def connect_to_database():
+    """Method to extract environment variables to connect to RDS instance."""
+    rds_host = os.environ['RDS_HOSTNAME']
+    rds_port = os.environ['RDS_PORT']
+    rds_username = os.environ['RDS_USERNAME']
+    rds_password = os.environ['RDS_PASSWORD']
+    rds_database = os.environ['RDS_DB_NAME']
+
+    return create_engine("mysql+mysqlconnector://"+rds_username+":"+ rds_password + "@" +
+                         rds_host + ":" + rds_port + "/" + rds_database, echo=True)
+
+
+engine = connect_to_database()
 
 # SQL Queries to be used below.
 CHAT_INSERT_QUERY = """
