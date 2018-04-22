@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 
 
 application = Flask(__name__)
-engine = create_engine("mysql+mysqlconnector://root@127.0.0.1:3306/ithaka", echo=True)
+engine = create_engine("mysql+mysqlconnector://root:password@gp-mysql.cvxevd8nqncr.us-east-2.rds.amazonaws.com:3306/ithaka", echo=True)
 
 
 # SQL Queries to be used below.
