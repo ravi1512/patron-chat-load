@@ -6,6 +6,8 @@
    Sample body - {"wizardid" : "wizard1", "chatid" : "traveler1"}
 3. POST /wizard/shift : A Wizard toggles between his/her shift
    Sample body - {"wizardid" : "wizard1", "shift" : "OFF"}
+
+NOTE : A traveler is identified by a chatid. chatid and traveler_id are used interchangeably.
 """
 
 from flask import Flask
@@ -15,6 +17,7 @@ from sqlalchemy import create_engine
 
 application = Flask(__name__)
 engine = create_engine("mysql+mysqlconnector://root@127.0.0.1:3306/ithaka", echo=True)
+
 
 # SQL Queries to be used below.
 CHAT_INSERT_QUERY = """
@@ -71,21 +74,8 @@ def chat_activity():
     engine.execute(CHAT_INSERT_QUERY.format(wizard_id, traveler_id, chat_time))
     engine.execute(CHAT_DELETE_QUERY)
 
-    # Check if traveler_id exists for that wizard_id. In case, a wizard has taken over a traveler
-    # by directly sending a message.
-    results = engine.execute("SELECT traveler_id FROM WIZARD_INFO WHERE "
-                             "wizard_id = '{0}'".format(wizard_id))
-    traveler_exists = False
-    for result in results:
-        if traveler_id == result["traveler_id"]:
-            traveler_exists = True
-            break
-
-    if not traveler_exists:
-        # Delete an existing relationship between a previous wizard for a traveler
-        engine.execute("DELETE FROM WIZARD_INFO WHERE traveler_id = {0}".format(traveler_id))
-        # Insert the current relationship between Wizard and Traveler
-        engine.execute(WIZARD_INSERT_QUERY.format(wizard_id, traveler_id, 'ON'))
+    # Update Wizard->Travler information.
+    update_wizard_traveler_info(traveler_id, wizard_id)
 
     return "Traveler " + traveler_id + " got message from " + wizard_id + " at " + str(chat_time)
 
@@ -107,12 +97,8 @@ def wizard_activity():
     # If a new wizard is assigned to traveler, whenever a message is sent to wizard
     # it will be reflected in Chat_Activity.
 
-    # Delete existing wizard-> traveler mapping from WIZARD_INFO
-    engine.execute("DELETE FROM WIZARD_INFO WHERE traveler_id = {0}".format(traveler_id))
-
-    # assign traveler to requested wizard in WIZARD_INFO
-    engine.execute(WIZARD_INSERT_QUERY.format(wizard_id, traveler_id, 'ON'))
-
+    # Update Wizard->Traveler information.
+    update_wizard_traveler_info(traveler_id, wizard_id)
     return "Traveler " + traveler_id + " is assigned to " + wizard_id
 
 
@@ -154,6 +140,8 @@ def compute_wizard_load():
     wizard_ids = []
     traveler_ids = []
 
+    # Filter out Wizards whose shift is ON and
+    # are handling more than 3 travelers
     wizard_load_query = """
         SELECT wizard_id FROM WIZARD_INFO WHERE shift = 'ON' 
         GROUP BY wizard_id HAVING COUNT(traveler_id) > 3;
@@ -161,19 +149,38 @@ def compute_wizard_load():
     results = engine.execute(wizard_load_query)
 
     for result in results:
-        wizard_ids.append(result['wizard_id'])
+        wizard_ids.append("'"+result['wizard_id']+"'")
 
-    if wizard_ids:
+    if not wizard_ids:
         return "All wizards are happy for now. Low-load!"
 
+    # Extract traveler ids that are serviced by heavy load wizards.
     load_query = """
-        SELECT traveler_id FROM `CHAT_ACTIVITY` chat WHERE  chat.wizard_id IN ({0});
+        SELECT traveler_id FROM `CHAT_ACTIVITY` chat WHERE chat.wizard_id IN ({0});
         """
+
     results = engine.execute(load_query.format(",".join(wizard_ids)))
 
     for result in results:
         traveler_ids.append(result['traveler_id'])
-    return "Load heavy for these travelers : {0}".format(*traveler_ids)
+    return "Load heavy for these travelers : {0}".format(traveler_ids)
+
+
+def update_wizard_traveler_info(traveler_id, wizard_id):
+    """Method to Check if traveler_id exists. Consider, a wizard has taken over a traveler
+     by directly sending a message."""
+    results = engine.execute("SELECT DISTINCT traveler_id FROM WIZARD_INFO")
+    traveler_exists = False
+    for result in results:
+        if traveler_id == result["traveler_id"]:
+            traveler_exists = True
+            break
+
+    if traveler_exists:
+        # Delete an existing relationship between a previous wizard for a traveler
+        engine.execute("DELETE FROM WIZARD_INFO WHERE traveler_id = '{0}'".format(traveler_id))
+    # Insert the current relationship between Wizard and Traveler
+    engine.execute(WIZARD_INSERT_QUERY.format(wizard_id, traveler_id, 'ON'))
 
 
 if __name__ == '__main__':
