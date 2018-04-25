@@ -151,6 +151,8 @@ def wizard_shift():
 def compute_wizard_load():
     """Method to compute a Wizard's load and send notification to concerned users
     that traffic is high right now."""
+    engine.execute(CHAT_DELETE_QUERY)
+
     wizard_ids = []
     traveler_ids = []
 
